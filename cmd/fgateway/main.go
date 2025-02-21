@@ -1,7 +1,7 @@
 package main
 
 import (
-	"os"
+	"log"
 
 	"github.com/fleezesd/fgateway/internal/cli/fgateway"
 	"github.com/spf13/pflag"
@@ -13,6 +13,6 @@ func main() {
 
 	root := fgateway.NewCmd()
 	if err := root.Execute(); err != nil {
-		os.Exit(1)
+		log.Fatal(err)
 	}
 }

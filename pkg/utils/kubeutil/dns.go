@@ -5,6 +5,6 @@ import (
 	"knative.dev/pkg/network"
 )
 
-func ServiceFQDN(serviceMeta metav1.ObjectMeta) string {
+func GetServiceFQDN(serviceMeta metav1.ObjectMeta) string {
 	return network.GetServiceHostname(serviceMeta.Name, serviceMeta.Namespace)
 }

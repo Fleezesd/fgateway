@@ -20,9 +20,7 @@ import (
 )
 
 func Run(ctx context.Context) error {
-	// make logging
-
-	// start components
+	SetupLogging(ctx, kubeutil.FgatewayComponentName)
 	return startFgateway(ctx)
 }
 
@@ -52,17 +50,15 @@ func startFgateway(ctx context.Context) error {
 	opts := &controller.StartOptions{
 		Cache:       cache,
 		KrtDebugger: new(krt.DebugHandler),
-		XdsHost:     GetControlPlaneXdsHost(),
-		XdsPort:     9000,
+		XdsHost: kubeutil.GetServiceFQDN(
+			metav1.ObjectMeta{
+				Name:      kubeutil.FgatewayServiceName,
+				Namespace: kubeutil.GetPodNamespace(),
+			},
+		),
+		XdsPort: 9000,
 	}
 	return startFgatewayWithConfig(ctx, restConfig, uccBuilder, opts)
-}
-
-func GetControlPlaneXdsHost() string {
-	return kubeutil.ServiceFQDN(metav1.ObjectMeta{
-		Name:      kubeutil.FgatewayServiceName,
-		Namespace: kubeutil.GetPodNamespace(),
-	})
 }
 
 func startControlPlane(ctx context.Context, callbacks xdsserver.Callbacks) (envoycache.SnapshotCache, error) {

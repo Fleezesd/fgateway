@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/fleezesd/fgateway/internal/fgateway"
+	"github.com/fleezesd/fgateway/pkg/utils/probes"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +20,8 @@ func NewCmd() *cobra.Command {
 				return nil
 			}
 			ctx := context.Background()
+			// probe server
+			probes.StartLivenessProbeServer(ctx)
 			if err := fgateway.Run(ctx); err != nil {
 				return fmt.Errorf("failed to run fgateway: %w", err)
 			}

@@ -7,11 +7,13 @@ toolchain go1.24.0
 require (
 	github.com/envoyproxy/go-control-plane v0.13.5-0.20250123154839-2a6715911fec
 	github.com/envoyproxy/go-control-plane/envoy v1.32.5-0.20250211152746-ef139ef8ea6b
+	github.com/go-logr/zapr v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/samber/lo v1.49.1
 	github.com/solo-io/go-utils v0.28.4
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
+	go.uber.org/zap v1.27.0
 	google.golang.org/grpc v1.70.0
 	istio.io/istio v0.0.0-20250221020952-88d88b645638
 	k8s.io/apimachinery v0.32.2
@@ -98,7 +100,6 @@ require (
 	go.opentelemetry.io/proto/otlp v1.5.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/crypto v0.33.0 // indirect
 	golang.org/x/exp v0.0.0-20250218142911-aa4b98e5adaa // indirect
 	golang.org/x/net v0.35.0 // indirect

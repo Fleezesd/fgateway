@@ -31,7 +31,7 @@ func NewUniquelyConnectedClients() (xdsserver.Callbacks, UniquelyConnectedClient
 
 func buildCollection(callbacks *callbacks) UniquelyConnectedClientsBuilder {
 	return func(ctx context.Context, krtOpts krtutil.KrtOptions) krt.Collection[ir.UniqlyConnectedClient] {
-		trigger := krt.NewRecomputeTrigger(true) // istio krt(Kubernetes reosurce Types) 用于处理资源状态的变化和依赖关系。
+		trigger := krt.NewRecomputeTrigger(true) // istio krt ( declarative controller framework)
 		col := &callbacksCollection{}
 
 		callbacks.collection.Store(col)
