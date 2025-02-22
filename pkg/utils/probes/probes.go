@@ -29,6 +29,7 @@ func DefaultProbeServerOptions() ServerOptions {
 
 func StartProbeServer(ctx context.Context, o ServerOptions) {
 	var server *http.Server
+	logger := contextutils.LoggerFrom(ctx)
 	// run the healthz server
 	go func() {
 		mux := new(http.ServeMux)
@@ -40,13 +41,13 @@ func StartProbeServer(ctx context.Context, o ServerOptions) {
 			Addr:    fmt.Sprintf(":%d", o.Port),
 			Handler: mux,
 		}
-		contextutils.LoggerFrom(ctx).Infof("probe server starting at %s listening for %s", server.Addr, o.Path)
+		logger.Infof("probe server starting at %s listening for %s", server.Addr, o.Path)
 		err := server.ListenAndServe()
 		if err != nil {
 			if errors.Is(err, http.ErrServerClosed) {
-				contextutils.LoggerFrom(ctx).Info("probe server closed")
+				logger.Info("probe server closed")
 			} else {
-				contextutils.LoggerFrom(ctx).Warnf("probe server closed with unexpected error: %v", err)
+				logger.Warnf("probe server closed with unexpected error: %v", err)
 			}
 		}
 	}()
@@ -58,7 +59,7 @@ func StartProbeServer(ctx context.Context, o ServerOptions) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			if err := server.Shutdown(ctx); err != nil {
-				contextutils.LoggerFrom(ctx).Warnf("probe server shutdown returned error: %v", err)
+				logger.Warnf("probe server shutdown returned error: %v", err)
 			}
 		}
 	}()

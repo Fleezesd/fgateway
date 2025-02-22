@@ -1,6 +1,6 @@
 package ir
 
-type PodLocality struct {
+type LocalityPod struct {
 	Region  string
 	Zone    string
 	Subzone string
@@ -9,7 +9,7 @@ type PodLocality struct {
 type UniqlyConnectedClient struct {
 	Role         string
 	Labels       map[string]string
-	Locality     PodLocality
+	Locality     LocalityPod
 	Namespace    string
 	resourceName string
 }

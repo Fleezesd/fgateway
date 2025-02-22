@@ -16,9 +16,10 @@ import (
 // SetupLogging setup zap for controller-runtime logger
 func SetupLogging(ctx context.Context, loggerName string) {
 	level := zapcore.InfoLevel
+	logger := contextutils.LoggerFrom(ctx)
 	if envLogLevel := os.Getenv(contextutils.LogLevelEnvName); envLogLevel != "" {
 		if err := (&level).Set(envLogLevel); err != nil {
-			contextutils.LoggerFrom(ctx).Infof("Could not set log level from env %s=%s, available levels "+
+			logger.Infof("Could not set log level from env %s=%s, available levels "+
 				"can be found here: https://pkg.go.dev/go.uber.org/zap/zapcore?tab=doc#Level",
 				contextutils.LogLevelEnvName,
 				envLogLevel,

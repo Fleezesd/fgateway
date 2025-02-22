@@ -7,7 +7,7 @@ import (
 	envoycache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	xdsserver "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	"github.com/fleezesd/fgateway/internal/fgateway/controller"
-	"github.com/fleezesd/fgateway/internal/fgateway/krtcollectoions"
+	"github.com/fleezesd/fgateway/internal/fgateway/krtcollections"
 	"github.com/fleezesd/fgateway/internal/fgateway/utils/krtutil"
 	"github.com/fleezesd/fgateway/pkg/utils/kubeutil"
 	"github.com/solo-io/go-utils/contextutils"
@@ -24,7 +24,7 @@ func Run(ctx context.Context) error {
 	return startFgateway(ctx)
 }
 
-func createKubeClient(restConfig *rest.Config, clusterId cluster.ID) (istiokube.Client, error) {
+func createIstioClient(restConfig *rest.Config, clusterId cluster.ID) (istiokube.Client, error) {
 	restCfg := istiokube.NewClientConfigForRestConfig(restConfig)
 	client, err := istiokube.NewClient(restCfg, clusterId) // clusterId
 	if err != nil {
@@ -37,10 +37,8 @@ func createKubeClient(restConfig *rest.Config, clusterId cluster.ID) (istiokube.
 
 func startFgateway(ctx context.Context) error {
 	restConfig := ctrl.GetConfigOrDie()
-
 	// callback & ucc builder
-	uniqueClientCallbacks, uccBuilder := krtcollectoions.NewUniquelyConnectedClients()
-
+	uniqueClientCallbacks, uccBuilder := krtcollections.NewUniquelyConnectedClients()
 	// envoycache
 	cache, err := startControlPlane(ctx, uniqueClientCallbacks)
 	if err != nil {
@@ -72,37 +70,35 @@ func startControlPlane(ctx context.Context, callbacks xdsserver.Callbacks) (envo
 func startFgatewayWithConfig(
 	ctx context.Context,
 	restConfig *rest.Config,
-	uccBuilder krtcollectoions.UniquelyConnectedClientsBuilder,
+	uccBuilder krtcollections.UniquelyConnectedClientsBuilder,
 	startOpts *controller.StartOptions,
 ) error {
 	ctx = contextutils.WithLogger(ctx, "k8s")
 	logger := contextutils.LoggerFrom(ctx)
 	logger.Infof("starting %s", kubeutil.FgatewayComponentName)
 
-	kubeClient, err := createKubeClient(restConfig, cluster.ID(kubeutil.GetClusterID()))
+	istioClient, err := createIstioClient(restConfig, cluster.ID(kubeutil.GetClusterID()))
 	if err != nil {
 		return err
 	}
-
 	logger.Info("creating krt collections")
-
-	// krt a framework for building declarative controllers
 	krtOpts := krtutil.NewKrtOptions(ctx.Done(), startOpts.KrtDebugger)
 
-	// todo: pod collections will do later
+	// 1.todo: pod collections will do later
+	_ = krtcollections.NewLocalityPodsCollection(istioClient, krtOpts)
 
 	// ucc builder
 	_ = uccBuilder(ctx, krtOpts)
 
 	logger.Info("initializing controller")
 
-	// todo: init k8s controller manager
+	// 2.todo: init k8s controller manager
 
 	// wait cache sync
 	logger.Info("waiting for cache sync")
-	kubeClient.RunAndWait(ctx.Done())
+	istioClient.RunAndWait(ctx.Done())
 
-	// todo: make admin server & start controller
+	// 3.todo: make admin server & start controller
 
 	return nil
 }

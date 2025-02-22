@@ -1,4 +1,4 @@
-package krtcollectoions
+package krtcollections
 
 import (
 	"sync"
