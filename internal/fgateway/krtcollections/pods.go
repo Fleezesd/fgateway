@@ -25,6 +25,20 @@ type LocalityPod struct {
 	Addresses       []string
 }
 
+func (c LocalityPod) IP() string {
+	if len(c.Addresses) == 0 {
+		return ""
+	}
+	return c.Addresses[0]
+}
+
+func (c LocalityPod) Equals(in LocalityPod) bool {
+	return c.Named == in.Named &&
+		c.Locality == in.Locality &&
+		maps.Equal(c.AugmentedLabels, in.AugmentedLabels) &&
+		slices.Equal(c.Addresses, in.Addresses)
+}
+
 // Pods collection cache
 func NewLocalityPodsCollection(istioClient istiokube.Client, krtOpts krtutil.KrtOptions) krt.Collection[LocalityPod] {
 	podClient := kclient.NewFiltered[*corev1.Pod](

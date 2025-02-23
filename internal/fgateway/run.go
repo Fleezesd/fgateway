@@ -83,15 +83,13 @@ func startFgatewayWithConfig(
 	}
 	logger.Info("creating krt collections")
 	krtOpts := krtutil.NewKrtOptions(ctx.Done(), startOpts.KrtDebugger)
-
-	// 1.todo: pod collections will do later
-	_ = krtcollections.NewLocalityPodsCollection(istioClient, krtOpts)
+	// make augmentedpods collection
+	augmentedPods := krtcollections.NewLocalityPodsCollection(istioClient, krtOpts)
+	augmentedPodsForUcc := augmentedPods
 
 	// ucc builder
-	_ = uccBuilder(ctx, krtOpts)
-
+	_ = uccBuilder(ctx, krtOpts, augmentedPodsForUcc)
 	logger.Info("initializing controller")
-
 	// 2.todo: init k8s controller manager
 
 	// wait cache sync
