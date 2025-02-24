@@ -6,6 +6,7 @@ import (
 	xdsserver "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	"github.com/fleezesd/fgateway/internal/fgateway/ir"
 	"github.com/fleezesd/fgateway/internal/fgateway/utils/krtutil"
+	"github.com/solo-io/go-utils/contextutils"
 	"istio.io/istio/pkg/kube/krt"
 )
 
@@ -36,8 +37,14 @@ func NewUniquelyConnectedClients() (xdsserver.Callbacks, UniquelyConnectedClient
 func buildCollection(callbacks *callbacks) UniquelyConnectedClientsBuilder {
 	return func(ctx context.Context, krtOpts krtutil.KrtOptions, augmentPods krt.Collection[LocalityPod]) krt.Collection[ir.UniqlyConnectedClient] {
 		trigger := krt.NewRecomputeTrigger(true) // istio krt ( declarative controller framework)
-		col := &callbacksCollection{}
-
+		col := &callbacksCollection{
+			logger:          contextutils.LoggerFrom(ctx).Desugar(),
+			augmentedPods:   augmentPods,
+			clients:         make(map[int64]ConnectedClient),
+			uniqClientCount: make(map[string]uint64),
+			uniqClients:     make(map[string]ir.UniqlyConnectedClient),
+			trigger:         trigger,
+		}
 		callbacks.collection.Store(col)
 		return krt.NewManyFromNothing(
 			func(ctx krt.HandlerContext) []ir.UniqlyConnectedClient {

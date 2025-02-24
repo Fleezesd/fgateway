@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/fleezesd/fgateway/internal/fgateway"
+	"github.com/fleezesd/fgateway/internal/version"
 	"github.com/fleezesd/fgateway/pkg/utils/probes"
 	"github.com/spf13/cobra"
 )
@@ -16,7 +17,7 @@ func NewCmd() *cobra.Command {
 		Short: "Runs the fgateway controller",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if fgatewayVersion {
-				fmt.Println("fgateway version 0.0.1") // will use version flag later
+				fmt.Println(version.String())
 				return nil
 			}
 			ctx := context.Background()

@@ -3,12 +3,14 @@ package fgateway
 import (
 	"context"
 	"net"
+	"os"
 
 	envoycache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	xdsserver "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	"github.com/fleezesd/fgateway/internal/fgateway/controller"
 	"github.com/fleezesd/fgateway/internal/fgateway/krtcollections"
 	"github.com/fleezesd/fgateway/internal/fgateway/utils/krtutil"
+	"github.com/fleezesd/fgateway/pkg/utils/envutil"
 	"github.com/fleezesd/fgateway/pkg/utils/kubeutil"
 	"github.com/solo-io/go-utils/contextutils"
 	"istio.io/istio/pkg/cluster"
@@ -83,20 +85,38 @@ func startFgatewayWithConfig(
 	}
 	logger.Info("creating krt collections")
 	krtOpts := krtutil.NewKrtOptions(ctx.Done(), startOpts.KrtDebugger)
-	// make augmentedpods collection
+	// augmentedpods collection
 	augmentedPods := krtcollections.NewLocalityPodsCollection(istioClient, krtOpts)
 	augmentedPodsForUcc := augmentedPods
+	if envutil.IsEnvTruthy("DISABLE_POD_LOCALITY_XDS") {
+		augmentedPodsForUcc = nil
+	}
 
 	// ucc builder
-	_ = uccBuilder(ctx, krtOpts, augmentedPodsForUcc)
+	ucc := uccBuilder(ctx, krtOpts, augmentedPodsForUcc)
 	logger.Info("initializing controller")
-	// 2.todo: init k8s controller manager
-
-	// wait cache sync
+	// controller builder
+	c, err := controller.NewControllerBuilder(ctx, controller.StartConfig{
+		// todo: add extra plugin later
+		Dev:           os.Getenv("LOG_LEVL") == "debug",
+		StartOpts:     startOpts,
+		RestConfig:    restConfig,
+		Client:        istioClient,
+		AugmentedPods: augmentedPods,
+		UniqueClients: ucc,
+		KrtOptions:    krtOpts,
+	})
+	if err != nil {
+		logger.Error("failed initializing controller:", err)
+		return err
+	}
+	// wait istio cache sync
 	logger.Info("waiting for cache sync")
 	istioClient.RunAndWait(ctx.Done())
 
-	// 3.todo: make admin server & start controller
+	// 3.todo: make admin server
 
-	return nil
+	// start controller
+	logger.Info("starting controller")
+	return c.Start(ctx)
 }
