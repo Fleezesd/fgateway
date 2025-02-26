@@ -4,9 +4,14 @@ import (
 	"context"
 
 	envoycache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
+	"github.com/fleezesd/fgateway/internal/fgateway/deployer"
+	"github.com/fleezesd/fgateway/internal/fgateway/extension/settings"
 	"github.com/fleezesd/fgateway/internal/fgateway/ir"
 	"github.com/fleezesd/fgateway/internal/fgateway/krtcollections"
 	"github.com/fleezesd/fgateway/internal/fgateway/utils/krtutil"
+	"github.com/fleezesd/fgateway/internal/fgateway/wellknown"
+	"github.com/solo-io/go-utils/contextutils"
+	"go.uber.org/zap"
 	istiokube "istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/krt"
 	istiolog "istio.io/istio/pkg/log"
@@ -18,6 +23,12 @@ import (
 	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	apiv1 "sigs.k8s.io/gateway-api/apis/v1"
+)
+
+const (
+	// AutoProvision controls whether the controller will be responsible for provisioning dynamic
+	// infrastructure for the Gateway API.
+	AutoProvision = true
 )
 
 var setupLog = ctrl.Log.WithName("setup")
@@ -47,11 +58,11 @@ type StartConfig struct {
 }
 
 type ControllerBuilder struct {
-	// proxy Syncer
+	// todo: proxy Syncer
 	cfg          StartConfig
 	mgr          ctrl.Manager
 	isOurGateway func(gw *apiv1.Gateway) bool
-	// settings
+	settings     settings.Settings
 }
 
 func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuilder, error) {
@@ -104,5 +115,32 @@ func NewControllerBuilder(ctx context.Context, cfg StartConfig) (*ControllerBuil
 
 // Start starts the controller.
 func (c *ControllerBuilder) Start(ctx context.Context) error {
-	return nil
+	logger := contextutils.LoggerFrom(ctx).Desugar()
+	logger.Info("starting gateway controller")
+
+	xdsHost, xdsPort := c.cfg.StartOpts.XdsHost, c.cfg.StartOpts.XdsPort
+	if xdsHost == "" {
+		return ctx.Err()
+	}
+
+	logger.Info("get xds address for deployer", zap.String("xds_host", xdsHost), zap.Int("xds_port", int(xdsPort)))
+
+	// todo: fix extend plugin & aws info
+
+	gwCfg := GatewayConfig{
+		Mgr:            c.mgr,
+		OurGateway:     c.isOurGateway,
+		ControllerName: wellknown.GatewayControllerName,
+		// controller will be responsible for provisioning dynamic infrastructure for the Gateway API.
+		AutoProvision: AutoProvision,
+		ControlPlane: &deployer.ControlPlaneInfo{
+			XdsHost: xdsHost,
+			XdsPort: xdsPort,
+		},
+	}
+	if err := NewBaseGatewayController(ctx, gwCfg); err != nil {
+		setupLog.Error(err, "unable to create controller")
+		return err
+	}
+	return c.mgr.Start(ctx)
 }
