@@ -81,6 +81,15 @@ func (c *controllerBuilder) watchGatewayClass(ctx context.Context) error {
 
 func (c *controllerBuilder) watchGateway(ctx context.Context) error {
 	// todo: add watch gateway logic
+	log := log.FromContext(ctx)
+
+	log.Info("creating deployer",
+		"controller name", c.cfg.ControllerName,
+		"server", c.cfg.ControlPlane.XdsHost,
+		"port", c.cfg.ControlPlane.XdsPort,
+	)
+
+	// d, err := deployer.NewDeployer(c.cfg.Mgr.GetClient())
 	return nil
 }
 

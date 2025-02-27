@@ -2,10 +2,10 @@ package krtcollections
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"strings"
 	"sync"
+
+	"github.com/pkg/errors"
 
 	envoy_config_core_v3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	envoy_service_discovery_v3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
@@ -119,7 +119,7 @@ func (o *callbacksCollection) add(streamId int64, r *envoy_service_discovery_v3.
 		if usePod {
 			if lo.IsNil(pod) {
 				// we need to use the pod locality info, so it's an error if we can't get the pod
-				return "", false, fmt.Errorf("pod not found for node %v", r.GetNode())
+				return "", false, errors.Errorf("pod not found for node %v", r.GetNode())
 			} else {
 				locality = pod.Locality
 				ns = pod.Namespace

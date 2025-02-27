@@ -380,6 +380,8 @@ gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C
 gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
+helm.sh/helm/v3 v3.17.1 h1:gzVoAD+qVuoJU6KDMSAeo0xRJ6N1znRxz3wyuXRmJDk=
+helm.sh/helm/v3 v3.17.1/go.mod h1:nvreuhuR+j78NkQcLC3TYoprCKStLyw5P4T7E5itv2w=
 honnef.co/go/tools v0.0.0-20190102054323-c2f93a96b099/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
 honnef.co/go/tools v0.0.0-20190523083050-ea95bdfd59fc/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
 istio.io/api v1.25.0-alpha.0.0.20250219222751-f4ae20b76d6e h1:SVOV+/E653H+T3qag+g4HkKObjVfOEiTYA1BtobtAUY=

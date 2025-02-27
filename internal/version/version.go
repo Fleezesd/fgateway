@@ -39,7 +39,7 @@ func init() {
 		return
 	}
 	v := Version
-	if lo.IsEmpty[string](v) {
+	if lo.IsEmpty(v) {
 		v = info.Main.Version
 	}
 	ref = &version{

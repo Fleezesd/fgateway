@@ -117,6 +117,7 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	helm.sh/helm/v3 v3.17.1 // indirect
 	istio.io/api v1.25.0-alpha.0.0.20250219222751-f4ae20b76d6e // indirect
 	istio.io/client-go v1.25.0-alpha.0.0.20250219223050-f56591e7d32b // indirect
 	k8s.io/api v0.32.2 // indirect
