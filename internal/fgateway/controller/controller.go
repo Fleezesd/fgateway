@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/fleezesd/fgateway/apis/fgateway/v1alpha1"
 	"github.com/fleezesd/fgateway/internal/fgateway/deployer"
 	"github.com/fleezesd/fgateway/internal/fgateway/wellknown"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -118,9 +121,29 @@ func (c *controllerBuilder) watchGateway(ctx context.Context) error {
 				predicate.GenerationChangedPredicate{},
 			),
 		))
-	_ = c.cfg.Mgr.GetClient()
+	cli := c.cfg.Mgr.GetClient()
 
-	// todo: watch for changes in gatewayparameters
+	// watch for changes in gatewayparameters
+	buildr.Watches(&v1alpha1.GatewayParameters{}, handler.EnqueueRequestsFromMapFunc(
+		func(ctx context.Context, obj client.Object) []reconcile.Request {
+			gwpName := obj.GetName()
+			gwpNamespace := obj.GetNamespace()
+
+			var gwList apiv1.GatewayList
+			err := cli.List(ctx, &gwList, client.InNamespace(gwpNamespace), client.MatchingFieldsSelector{Selector: fields.OneTermEqualSelector(GatewayParamsField, gwpName)})
+			if err != nil {
+				log.Error(err, "could not list Gateways using GatewayParameters", "gwpNamespace", gwpNamespace, "gwpName", gwpName)
+				return []reconcile.Request{}
+			}
+
+			var reqs []reconcile.Request
+			for _, gw := range gwList.Items {
+				reqs = append(reqs, reconcile.Request{NamespacedName: client.ObjectKey{Namespace: gw.Namespace, Name: gw.Name}})
+			}
+			return reqs
+		},
+	))
+
 	for _, gvk := range gvks {
 		obj, err := c.cfg.Mgr.GetScheme().New(gvk)
 		if err != nil {
@@ -137,6 +160,18 @@ func (c *controllerBuilder) watchGateway(ctx context.Context) error {
 			opts = append(opts, builder.WithPredicates(predicate.GenerationChangedPredicate{}))
 		}
 		buildr.Owns(clientObj, opts...)
+	}
+
+	// make reconciler
+	gwReconciler := &gatewayReconciler{
+		cli:           c.cfg.Mgr.GetClient(),
+		scheme:        c.cfg.Mgr.GetScheme(),
+		autoProvision: c.cfg.AutoProvision,
+		deployer:      deployer,
+	}
+	err = buildr.Complete(gwReconciler)
+	if err != nil {
+		return err
 	}
 	return nil
 }

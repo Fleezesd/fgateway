@@ -2,6 +2,7 @@ package deployer
 
 import (
 	"context"
+	"encoding/json"
 	"io/fs"
 	"path/filepath"
 	"slices"
@@ -12,12 +13,15 @@ import (
 	"helm.sh/helm/v3/pkg/storage"
 	"helm.sh/helm/v3/pkg/storage/driver"
 
+	"github.com/fleezesd/fgateway/apis/fgateway/v1alpha1"
+	"github.com/fleezesd/fgateway/internal/fgateway/wellknown"
 	"github.com/fleezesd/fgateway/internal/version"
 	"github.com/fleezesd/fgateway/manifests/helm"
 	"github.com/fleezesd/fgateway/pkg/utils/helmutil"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/utils/ptr"
 	api "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/samber/lo"
@@ -214,6 +218,140 @@ func (d *Deployer) Render(name, ns string, vals map[string]any) ([]client.Object
 	return objects, nil
 }
 
+// GetObjsToDeploy does the following:
+// * performs GatewayParameters lookup/merging etc to get a final set of helm values
+// * use those helm values to render the internal `gloo-gateway` helm chart into k8s objects
+// * sets ownerRefs on all generated objects
+// * returns the objects to be deployed by the caller
+func (d *Deployer) GetObjsToDeploy(ctx context.Context, gw *api.Gateway) ([]client.Object, error) {
+	gwParam, err := d.getGatewayParametersForGateway(ctx, gw)
+	if err != nil {
+		return nil, err
+	}
+	// If this is a self-managed Gateway, skip gateway auto provisioning
+	if gwParam != nil && gwParam.Spec.SelfManaged != nil {
+		return nil, nil
+	}
+
+	logger := log.FromContext(ctx)
+
+	vals, err := d.getValues(gw, gwParam)
+	if err != nil {
+		return nil, errors.Errorf("failed to get values to render objects for gateway %s.%s: %w", gw.GetNamespace(), gw.GetName(), err)
+	}
+	logger.V(1).Info("got deployer helm values",
+		"gatewayName", gw.GetName(),
+		"gatewayNamespace", gw.GetNamespace(),
+		"values", vals)
+
+	// convert to json for helm (otherwise go template fails, as the field names are uppercase)
+	var convertedVals map[string]any
+	err = jsonConvert(vals, &convertedVals)
+	if err != nil {
+		return nil, errors.Errorf("failed to convert helm values for gateway %s.%s: %w", gw.GetNamespace(), gw.GetName(), err)
+	}
+	objs, err := d.renderChartToObjects(gw, convertedVals)
+	if err != nil {
+		return nil, errors.Errorf("failed to get objects to deploy for gateway %s.%s: %w", gw.GetNamespace(), gw.GetName(), err)
+	}
+	// Set owner ref
+	for _, obj := range objs {
+		obj.SetOwnerReferences([]metav1.OwnerReference{{
+			Kind:       gw.Kind,
+			APIVersion: gw.APIVersion,
+			Controller: ptr.To(true),
+			UID:        gw.UID,
+			Name:       gw.Name,
+		}})
+	}
+
+	return objs, nil
+}
+
+// getGatewayParametersForGateway returns the a merged GatewayParameters object resulting from the default GwParams object and
+// the GwParam object specifically associated with the given Gateway (if one exists).
+func (d *Deployer) getGatewayParametersForGateway(ctx context.Context, gw *api.Gateway) (*v1alpha1.GatewayParameters, error) {
+	logger := log.FromContext(ctx)
+
+	gwpName := gw.GetAnnotations()[wellknown.GatewayParametersAnnonationName]
+	if gwpName == "" {
+		logger.V(1).Info("no GatewayParameters found for Gateway",
+			"gatewayName", gw.GetName(),
+			"gatewayNamespace", gw.GetNamespace())
+		return d.getDefaultGatewayParameters(ctx, gw)
+	}
+
+	// the GatewayParameters must live in the same namespace as the Gateway
+	gwpNamespace := gw.GetNamespace()
+	gwp := &v1alpha1.GatewayParameters{}
+	err := d.cli.Get(ctx, client.ObjectKey{Namespace: gwpNamespace, Name: gwpName}, gwp)
+	if err != nil {
+		return nil, getGatewayParametersError(err, gwpNamespace, gwpName, gw.GetNamespace(), gw.GetName(), "Gateway")
+	}
+
+	defaultGwp, err := d.getDefaultGatewayParameters(ctx, gw)
+	if err != nil {
+		return nil, err
+	}
+	mergedGwp := defaultGwp
+	deepMergeGatewayParameters(mergedGwp, gwp)
+	return mergedGwp, nil
+}
+
+func (d *Deployer) getDefaultGatewayParameters(ctx context.Context, gw *api.Gateway) (*v1alpha1.GatewayParameters, error) {
+	gwc, err := d.getGatewayClassFromGateway(ctx, gw)
+	if err != nil {
+		return nil, err
+	}
+	return d.getGatewayParametersForGatewayClass(ctx, gwc)
+}
+
+func (d *Deployer) getGatewayClassFromGateway(ctx context.Context, gw *api.Gateway) (*api.GatewayClass, error) {
+	if lo.IsNil(gw) {
+		return nil, errors.New("nil gateway")
+	}
+	if gw.Spec.GatewayClassName == "" {
+		return nil, errors.New("GatewayClassName must not be empty")
+	}
+
+	gwc := &api.GatewayClass{}
+	err := d.cli.Get(ctx, client.ObjectKey{Name: string(gw.Spec.GatewayClassName)}, gwc)
+	if err != nil {
+		return nil, errors.Errorf("failed to get GatewayClass for Gateway %s/%s", gw.GetName(), gw.GetNamespace())
+	}
+	return gwc, nil
+}
+
+func (d *Deployer) getGatewayParametersForGatewayClass(ctx context.Context, gwc *api.GatewayClass) (*v1alpha1.GatewayParameters, error) {
+	logger := log.FromContext(ctx)
+
+	paramRef := gwc.Spec.ParametersRef
+	if lo.IsNil(paramRef) {
+		return nil, errors.Errorf("no default GatewayParameters associated with GatewayClass %s/%s", gwc.GetNamespace(), gwc.GetName())
+	}
+
+	gwpName := paramRef.Name
+	if gwpName == "" {
+		err := errors.New("no GatewayParameters found for GatewayClass")
+		logger.Error(err,
+			"gatewayClassName", gwc.GetName(),
+			"gatewayClassNamespace", gwc.GetNamespace())
+		return nil, err
+	}
+
+	gwpNamespace := ""
+	if paramRef.Namespace != nil {
+		gwpNamespace = string(*paramRef.Namespace)
+	}
+
+	gwp := &v1alpha1.GatewayParameters{}
+	err := d.cli.Get(ctx, client.ObjectKey{Namespace: gwpNamespace, Name: gwpName}, gwp)
+	if err != nil {
+		return nil, getGatewayParametersError(err, gwpNamespace, gwpName, gwc.GetNamespace(), gwc.GetName(), "GatewayClass")
+	}
+	return gwp, nil
+}
+
 // setupHelmStorage creates and configures in-memory Helm storage
 func setupHelmStorage(namespace string) *action.Configuration {
 	mem := driver.NewMemory()
@@ -240,4 +378,17 @@ func formatRenderError(err error, namespace, name string) error {
 // formatConversionError creates a formatted error for YAML conversion failures
 func formatConversionError(err error, namespace, name string) error {
 	return errors.Errorf("failed to convert helm manifest yaml to objects for gateway %s.%s: %w", namespace, name, err)
+}
+
+// TODO: make get values for get helm config
+func (d *Deployer) getValues(gw *api.Gateway, gwParam *v1alpha1.GatewayParameters) (*helmConfig, error) {
+	return &helmConfig{}, nil
+}
+
+func jsonConvert(in *helmConfig, out interface{}) error {
+	b, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, out)
 }
